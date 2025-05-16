@@ -16,9 +16,12 @@ declare global {
   }
 }
 
+// Configuración del entorno y creación del cliente Prisma
+// Actualizado para forzar ejecución del workflow
 dotenv.config();
 const prisma = new PrismaClient();
 
+// Exportamos la aplicación para poder usarla en los tests
 export const app = express();
 export default app;
 
@@ -46,6 +49,7 @@ app.post('/upload', uploadFile);
 // Route to get candidates by position
 app.use('/positions', positionRoutes);
 
+// Middleware para loguear las solicitudes
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
@@ -53,16 +57,19 @@ app.use((req, res, next) => {
 
 const port = 3010;
 
+// Ruta principal
 app.get('/', (req, res) => {
   res.send('Hola LTI!');
 });
 
+// Middleware para manejar errores
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.type('text/plain');
   res.status(500).send('Something broke!');
 });
 
+// Iniciar el servidor
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });

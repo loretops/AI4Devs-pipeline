@@ -1,0 +1,136 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - 'pipeline-LPS'  # Incluir explícitamente esta rama
+      - '**'
+      - '!main'  # Excluyendo la rama principal
+    paths:
+      - 'backend/**'  # Solo ejecutar cuando hay cambios en el backend
+      - '.github/workflows/**'  # También ejecutar cuando hay cambios en los workflows
+
+jobs:
+  test:
+    name: Run Backend Tests
+    # Este job se ejecutará cuando hay un push a una rama con un PR abierto
+    if: github.event.pull_request || github.head_ref
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      
+      - name: Run tests
+        working-directory: backend
+        run: npm test
+
+  build:
+    name: Build Backend
+    needs: test
+    # Este job se ejecutará si los tests fueron exitosos
+    if: success()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-build
+          path: backend/dist
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    # Este job se ejecutará si el build fue exitoso
+    if: success()
+    runs-on: ubuntu-latest
+    environment: backend_deplyment
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: backend-build
+          path: backend/dist
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-region: 'eu-west-3'  # Región de AWS
+      
+      - name: Deploy to EC2 instance
+        env:
+          HOST_NAME: ${{ secrets.EC2_INSTANCE }}
+          USER_NAME: 'ec2-user'  # Usuario típico de EC2
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          
+          # Comprimir la carpeta dist
+          cd backend
+          tar -czf dist.tar.gz dist/ package.json package-lock.json
+          
+          # Transferir archivos al servidor
+          scp -o StrictHostKeyChecking=no -i ../private_key.pem dist.tar.gz ${USER_NAME}@${HOST_NAME}:~/app/
+          
+          # Ejecutar comandos en el servidor remoto
+          ssh -o StrictHostKeyChecking=no -i ../private_key.pem ${USER_NAME}@${HOST_NAME} '
+            cd ~/app
+            mkdir -p dist-new
+            tar -xzf dist.tar.gz -C dist-new
+            
+            # Detener la aplicación actual
+            pm2 stop backend || true
+            
+            # Reemplazar la carpeta actual con la nueva
+            rm -rf dist/
+            mv dist-new/dist/ ./dist/
+            cp dist-new/package*.json ./
+            
+            # Instalar dependencias y reiniciar la aplicación
+            npm ci --production
+            pm2 restart backend || pm2 start dist/index.js --name backend
+            
+            # Limpiar archivos temporales
+            rm -rf dist-new/ dist.tar.gz
+          '
+          
+          # Eliminar clave privada
+          cd ..
+          rm private_key.pem 

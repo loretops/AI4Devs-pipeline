@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+1. Quiero que cada prompt mío, debes incluirlo en el archivo [prompts-LPS](mdc:prompts/prompts-LPS), en formato markdown, con  la siguiente estructura según el ejemplo. El modelo usado tu sabes cual es, así que indicalo, aunque yo haya elegido 'Auto'. El modo (Ask o Agent) según esté seleccionado
+
+    Ejemplo:
+    **Prompt 1:**
+    Cursor + Claude-3.7-sonnet (Ask/Agent)
+
+Analiza e indexa todo el proyecto
+
+Pero no quiero que incluyas tus respuestas, o tu línea de pensamiento, sino solo lo que yo te pido o pregunto
+
+2. Quiero que tu forma de desarrollar sea **paso a paso**, y simplifcando las respuestas, sin complicarte
+
+3. No hagas nada que no entiendas. **Pregúntame lo que necesites**
